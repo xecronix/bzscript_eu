@@ -1,0 +1,75 @@
+= BZScript Logger (bzlog.e) =
+
+This module provides a simple, extensible logging system for use throughout the 
+BZScript ecosystem. It supports multiple log levels, timestamps, and log file output.
+
+== Features ==
+* Custom logger object type using eumem-based struct
+* Support for six log levels:
+** SILENT
+** ERR
+** INFO
+** DEBUG
+** TRACE
+** VERBOSE
+* Logs include timestamps
+* Messages written to a specified log file
+* Optional log level filtering
+* Safe memory management and type checking
+
+== Usage ==
+
+{{{
+include lib/utils/bzlog.e
+}}}
+
+=== Creating a Logger ===
+
+{{{
+TBzLog mylog = bzlog:new(DEBUG, "logfile.log")
+}}}
+
+This creates a logger that writes to "logfile.log" and includes messages at DEBUG level and above.
+
+=== Writing Messages ===
+
+{{{
+bzlog:write(mylog, INFO, "Program started")
+bzlog:write(mylog, DEBUG, "Debugging a thing")
+bzlog:write(mylog, ERR, "Something went wrong!")
+}}}
+
+Only messages equal to or more severe than the logger's level are written.
+
+=== Releasing the Logger ===
+
+{{{
+bzlog:free(mylog)
+}}}
+
+Closes the log file and frees memory.
+
+== Log Levels ==
+
+|= Level   |= Description          |
+| SILENT   | No output             |
+| ERR      | Errors only           |
+| INFO     | Informational events  |
+| DEBUG    | Debug output          |
+| TRACE    | Verbose tracing       |
+| VERBOSE  | Everything            |
+
+== Output Format ==
+
+Each log message is timestamped:
+
+{{{
+[2025-05-20 14:13:23] [debug] Token stream initialized
+}}}
+
+== Notes ==
+
+* Internally, bzlog uses eumem to emulate an object system
+* Each logger validates its type ID before access
+* Timestamps are formatted using datetime:now() and format()
+
