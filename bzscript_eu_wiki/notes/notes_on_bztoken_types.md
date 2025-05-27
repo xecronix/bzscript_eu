@@ -9,7 +9,7 @@ This page defines the internal structure of a `BZToken` and outlines the core ty
 
 ```euphoria
 BZToken {
-    type          : atom        -- Token category (e.g., NUMBER, IDENTIFIER, OPERATOR, GROUP)
+    type          : atom        -- Token category (e.g., RESOVABLE, LITERAL, ACTION)
     name          : string      -- Exact characters from the source (e.g., "+", "x", "#(")
     value         : object      -- Parsed value or payload (e.g., 42, "hello", NULL)
     source_line   : integer     -- Line number in the original source
@@ -19,6 +19,8 @@ BZToken {
     parent_ref    : BZToken     -- Optional back-reference to parent token (nullable)
 }
 ````
+parent_ref is a runtime-only field used for scope, navigation, and evaluation. It is never serialized.
+Hierarchy is preserved through nesting (tokens[] in memory, child <token> nodes in XML).
 
 ---
 

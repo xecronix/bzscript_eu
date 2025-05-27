@@ -17,10 +17,10 @@ integer log_handle = -1
 
 -- Open the log file for appending
 global procedure init_logger()
-    if not file_exists(LOG_FILE) then
-        log_handle = open(LOG_FILE, "w")
+    if not file_exists(log_file) then
+        log_handle = open(log_file, "w")
     else
-        log_handle = open(LOG_FILE, "a")
+        log_handle = open(log_file, "a")
     end if
     if log_handle = -1 then
         puts(1, "[logger] Failed to open log file.\n")
@@ -69,7 +69,7 @@ global procedure logger(integer level, sequence msg)
     if log_handle = -1 then
         init_logger()
     end if
-    if level <= LOG_LEVEL then
+    if level <= log_level then
         if level  = SILENT  then
             -- do nothing
             elsif level = ERR then

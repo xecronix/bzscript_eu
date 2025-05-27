@@ -19,10 +19,11 @@
 | #      | Number variable          | var_number |
 | @(     | Group Resolves to Array  | group_array| 
 | $(     | Group Resolves to String | group_string| 
-| %(     | Group Resolves to List   | group_list| 
+| %(     | Group Resolves to List   | group_list  | 
 | #(     | Group Resolves to Number | group_number| 
 | )      | Close group              | group_close|
-| ,      | Seperator                | silent   |
+|()      | Expression termination   | silent     |
+| ,      | Seperator                | silent     |
 | //     | comment                  | <stripped during tokenization> |
 | `      | Begin/end string         | <stripped during tokenization> |
 | ``     | Escape tick              | <replaced during tokenization> |

@@ -1,0 +1,44 @@
+# 🧹 Ignore build artifacts
+*.o
+*.exe
+*.out
+*.a
+*.dll
+*.so
+*.dylib
+
+# 🔍 Ignore logs and debug files
+*.log
+*.trace
+*.dbg
+
+# 📦 Ignore editor-specific files
+*.geany
+*.swp
+*.bak
+*.tmp
+
+# 🧪 Ignore test output
+/tests/*.log
+/tests/*.out
+
+# 🚫 Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ingnore private notes
+*.ignore
+
+# 📂 Ignore development folders (optional)
+__build__/
+__temp__/
+dist/
+build/
+bin/
+obj/
+
+# ⚙️ Ignore backup files
+*~
+
+# 🛠 Ignore Euphoria-specific temp files (if any emerge)
+*.ewc
