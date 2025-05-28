@@ -7,46 +7,17 @@ include ezbzll1.e
 
 -- when we start building bztokens for real, this is what I need for params
 -- NOTE TO SELF:  change here will almost certain make function new_empty_envelope() busted
-enum _kind, _name, _line_num, _col_num, _value, _factory_request_str
+public enum _kind, _name, _line_num, _col_num, _value, _factory_request_str
 enum _symbol_name, _symbol_factory_str
 
 integer line_num = 1
 integer col_num = 1
 
-sequence stack = {}
 sequence tokens = {}
 
 sequence _symbols = {}
 sequence _keywords = {}
 sequence _paired = {}
-
-
-
--- TODO I'm going to want this for matching pairs
-function push(sequence word)
-return 1
-end function 
-
--- TODO I'm going to want this for matching pairs
-function pop()
-return 1
-end function
-
--- TODO I'm going to want this for matching pairs
-function is_open_pair(sequence str)
-return 1
-end function 
-
--- TODO I'm going to want this for matching pairs
-function is_closing_pair(sequence str)
-return 1
-end function
-
--- TODO I'm going to want this for matching pairs
-function is_valid_closing_pair(sequence str)
-return 1
-end function
-
 
 -- this function calls the is_symbol function.
 -- is symbol looks up _symbols in a map and if it's
@@ -149,8 +120,9 @@ function build_token_from_literal_num()
     end while
     
     if length(buf) then
-        token_start[_name] = buf
+        token_start[_name] = "__BZ__NUMBER__"
         token_start[_kind] = BZKIND_LITERAL
+        token_start[_value] = buf
         reduced = 1
     end if
     tokens = append(tokens, token_start)
@@ -259,8 +231,9 @@ function build_token_from_literal_str()
     end while
     
     if length(buf) then
-        t_start[_name] = buf
+        t_start[_name] = "__BZ__STRING__"
         t_start[_kind] = BZKIND_LITERAL
+        t_start[_value] = buf
         reduced = 1
     end if
     
@@ -525,7 +498,7 @@ function raw_to_token()
     return 0
 end function
 
-function make_tokens(sequence raw, sequence symbols, sequence keywords, sequence paired)
+public function make_tokens(sequence raw, sequence symbols, sequence keywords, sequence paired)
     -- let's make sure there's some data to work with AND
     -- ************
     -- !!REMEMBER!! Stream Management Rules
@@ -567,73 +540,12 @@ function make_tokens(sequence raw, sequence symbols, sequence keywords, sequence
 
     print_token_stream()
     
-    return 0
+    return tokens
 end function
 
-function new_empty_envelope()
+public function new_empty_envelope()
     -- NOTE TO SELF: changes here might mean there were changes to the enum CHECK TO OF CODE
     -- enum _kind, _name, _line_num, _col_num, _value, _factory_request_str
     return {0, "", 0, 0, 0, ""}
 end function
 
-
-function main()
-
-    sequence input = join( {"fun begin(){",
-        "let #x = 0;",
-        "let #y = 0;",
-        "do {",
-        "    #y = 0 ;",
-        "    if (#x == 5) {",
-        "        print (`halfway done\\n`)            ;",
-        "    } ",
-        "    do {",
-        "        let @counts = [#x+1, #y+1] ;",
-        "        printf( `Outer Loop:                  ##\\nInner Loop: ##\\n`, @counts) ;",
-        "        #y += 1;",
-        "        if(#y == 5) {break        ;            } ",
-        "    } ",
-        "    #x += 1 ",
-        "    if(x == 10) {break;} ",
-        "} ",
-    "} "}, "\n")
-    
-    --input = "#x"
-    
-    sequence symbols = {
-    {";", "expression_end"},
-    {"@","var_array"}, {"$","var_string"},{"#","var_number"},
-    {"(", "group_math"}, {")", "group_close"},
-    {"{", "block_open"}, {"}", "block_close"},
-    {"[", "array_open"}, {"]", "array_close"},
-    {"+", "add"}, {"-", "subtract"}, {"*", "multiply"}, {"/", "divide"},
-    {"^", "exponent"}, {"=", "assignment"},
-    {"==", "num_compare_eq"}, {"!=", "num_compare_not_eq"},
-    {">", "num_compare_great"}, {"<", "num_compare_less"},
-    {">=", "num_compare_great_eq"}, {"<=", "num_compare_less_eq"},
-    {"+=", "increase_by"}, {"-=", "subtract_by"},
-    {"*=", "multiply_by"}, {"/=", "divide_by"},
-    {"++", "increment"}, {"--", "decrement"},
-    {",", "param_delimiter"},
-    {"//", "__STRIP__"},
-    {"`", "__STRIP__"}, {"``", "__STRIP__"}
-}
-
-sequence keywords = {
-    {"fun", "fun"}, {"let", "let"},
-    {"if", "if"}, {"else", "else"}, {"elseif", "elseif"},
-    {"do", "do_loop"}, {"break", "break"}, {"continue", "continue"},
-    {"return", "return"}, {"print", "print"},{"printf", "printf"}
-}
-
-sequence paired = {
-    {"(", {")"}},
-    {"{", {"}"}},
-    {"[", {"]"}}
-}
-
-    make_tokens(input, symbols, keywords, paired)
-    return 0
-end function 
-
-main()
