@@ -1,4 +1,4 @@
--- LL1.e
+-- LL1_stream.e
 namespace LL1
 include std/eumem.e
 include std/io.e
@@ -59,7 +59,7 @@ end function
 --
 -- Peek ahead (no index change)
 --
-public function peek(LL1 ptr)
+public function look_next(LL1 ptr)
     if not has_more(ptr) then return NULL end if
     integer peekIdx = eumem:ram_space[ptr][LL1_INDEX]
     peekIdx += 1

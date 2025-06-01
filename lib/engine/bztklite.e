@@ -7,6 +7,7 @@ include bztoken.e
 include ezbzll1.e
 include std/io.e
 include std/sequence.e
+include ast_token.e
 
 sequence _stack    = {}
 sequence _symbols  = {}
@@ -15,7 +16,7 @@ sequence _paired   = {}
 sequence _tokens   = {}
 
 -- Strongly typed hint enums
-enum _fun_call, _fun_def, _fun_call_group, _fun_def_group, _fun_user, _math, _bz_keyword
+enum _fun_call, _fun_def, _fun_call_group, _fun_def_group, _math, _bz_keyword
 enum _keyword_name, _keyword_factory_str
 
 -- Decoupled map: {enum, string}
@@ -23,10 +24,9 @@ sequence value_hints = {
     {_fun_call,              "__FUN_CALL__"        },
     {_fun_def,               "__FUN_DEF__"         },
     {_fun_call_group,        "__FUN_CALL_GROUP__"  },
-    {_fun_def_group,           "__FUN_DEF_GROUP__"   },
-    {_fun_user, "__FUN_USER__"},
+    {_fun_def_group,         "__FUN_DEF_GROUP__"   },
     {_math,                  "__MATH__"            },
-    {_bz_keyword,               "__KEYWORD__"         }
+    {_bz_keyword,               "__KEYWORD__"      }
 }
 
 -- Safe hint lookup function
@@ -65,7 +65,6 @@ return 1
 end function
 
 function is_keyword(sequence char)
-  -- none found. look for one char _symbols
     integer i = 1
     while i <= length(_keywords) do
         sequence k = _keywords[i][_keyword_name]
@@ -120,15 +119,15 @@ public function group_tokens(sequence raw_source, sequence tokens,
         
     while 1 do
         sequence token = current()
-        sequence next_token = new_empty_envelope()
-        sequence prev_token = new_empty_envelope()
+        sequence next_token = new_empty_ast_token()
+        sequence prev_token = new_empty_ast_token()
         
         if (has_more()) then
             next_token = look_next()        
         end if
         
-        if (has_less()) then
-            prev_token = recall()        
+        if (length(_tokens)) then
+            prev_token = _tokens[length(_tokens)]
         end if
         
         
@@ -186,11 +185,27 @@ public function group_tokens(sequence raw_source, sequence tokens,
         elsif equal(prev_token[_name], "fun") then
             -- this is a function def
             token[_value] = token_hint(_fun_def)
+            token[_factory_request_str] = "fun_def"
             _tokens = append(_tokens, token)
+            
+        elsif equal(token[_name], "(") then
+            if equal(prev_token[_value], token_hint(_bz_keyword)) or
+                equal(prev_token[_value], token_hint(_fun_call))  then
+                
+                token[_value] = token_hint(_fun_call_group)
+            elsif equal(prev_token[_value], token_hint(_fun_def)) then
+                token[_value] = token_hint(_fun_def_group)
+            else
+                token[_value] = token_hint(_math)
+            end if
+        
+        
+            _tokens = append(_tokens, token)  
             
         else
             -- user function
-            token[_value] = token_hint(_fun_user)
+            token[_value] = token_hint(_fun_call)
+            token[_factory_request_str] = "fun_call"
             _tokens = append(_tokens, token)
         end if
         
@@ -199,51 +214,13 @@ public function group_tokens(sequence raw_source, sequence tokens,
         end if
     end while  
     
-    ezbzll1:init(_tokens)
-    _tokens = {} 
-    
-    while 1 do
-        sequence token = current()
-        sequence next_token = new_empty_envelope()
-        sequence prev_token = new_empty_envelope()
-        
-        if (has_more()) then
-            next_token = look_next()        
-        end if
-        
-        if (has_less()) then
-            prev_token = recall()        
-        end if
-        
-        if equal(token[_name], "(") then
-            if equal(prev_token[_value], token_hint(_bz_keyword)) or
-                equal(prev_token[_value], token_hint(_fun_call)) or
-                equal(prev_token[_value], token_hint(_fun_user)) then
-                
-                token[_value] = token_hint(_fun_call_group)
-            elsif equal(prev_token[_value], token_hint(_fun_def)) then
-                token[_value] = token_hint(_fun_def_group)
-            else
-                token[_value] = token_hint(_math)
-            end if
-        end if
-        
-        _tokens = append(_tokens, token)        
-    
-        if (equal(next(), 0)) then
-            exit
-        end if
-    end while
-    
-    
-    puts(1, "pass 2\n\n") 
     print_token_stream()
     return _tokens  
 end function
 
 
 
-function main()
+function test_bztklite_e()
 
     sequence input = join( {"fun begin(){",
         "let #x = 0;",
@@ -261,11 +238,17 @@ function main()
         "        if(#y == 5) {break        ;            } ",
         "    } ",
         "    #x += 1 ",
-        "    if(x == 10) {break;} ",
+        "    if(#x == 10) {break;} ",
         "} ",
-    "} "}, "\n")
+        "return #x;",
+        "} "}, "\n")
     
-    --input = "#x"
+--    input = join( {"fun begin(){",
+--        "    let #tax = .07;",
+--        "    let #cost = 10;",
+--        "    let #total = #cost + #cost * #tax;",
+--       "    print($total);",
+--      "}"}, "\n")
     
     sequence symbols = {
     {";", "expression_end"},
@@ -281,7 +264,7 @@ function main()
     {"+=", "increase_by"}, {"-=", "subtract_by"},
     {"*=", "multiply_by"}, {"/=", "divide_by"},
     {"++", "increment"}, {"--", "decrement"},
-    {",", "param_delimiter"},
+    {",", "delimiter"},
     {"//", "__STRIP__"},
     {"`", "__STRIP__"}, {"``", "__STRIP__"}
 }
@@ -290,7 +273,7 @@ sequence keywords = {
     {"fun", "fun"}, {"let", "let"},
     {"if", "if"}, {"else", "else"}, {"elseif", "elseif"},
     {"do", "do_loop"}, {"break", "break"}, {"continue", "continue"},
-    {"return", "return"}, {"print", "print"},{"printf", "printf"}
+    {"return", "return"}
 }
 
 sequence paired = {
@@ -301,7 +284,9 @@ sequence paired = {
 
     sequence tokens = make_tokens(input, symbols, keywords, paired)
     tokens = group_tokens(input, tokens, symbols, keywords, paired)
+    -- sequence ast = make_ast(tokens)
     return 0
 end function 
 
-main()
+--test_bztklite_e()
+

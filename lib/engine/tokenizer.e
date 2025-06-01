@@ -1,20 +1,15 @@
 -- tokenizer.e
-with trace
 include bztoken.e
 include std/sequence.e
 include ezbzll1.e
+include ast_token.e
 
-
--- when we start building bztokens for real, this is what I need for params
--- NOTE TO SELF:  change here will almost certain make function new_empty_envelope() busted
-public enum _kind, _name, _line_num, _col_num, _value, _factory_request_str
 enum _symbol_name, _symbol_factory_str
 
 integer line_num = 1
 integer col_num = 1
 
 sequence tokens = {}
-
 sequence _symbols = {}
 sequence _keywords = {}
 sequence _paired = {}
@@ -34,7 +29,7 @@ function build_token_from_symbol()
     sequence buf = ""
     sequence token_start = current()
     sequence t_name = token_start[_name]
-    sequence next_token = new_empty_envelope()
+    sequence next_token = new_empty_ast_token()
     sequence t_next
     integer reduced = 0
     
@@ -63,7 +58,7 @@ function build_token_from_symbol()
         -- Or, if I don't, ditch it.
         reduced = 1 
     end if
-    tokens = append(tokens, token_start)
+    tokens = ast_list_append(tokens, token_start)
     return reduced
 end function 
 
@@ -74,10 +69,16 @@ function build_token_from_literal_num()
     integer dot_found = 0
     sequence digits = {"0","1","2","3","4","5","6","7","8","9"}
     
+    if equal(token_start[_name], ".") then
+        buf = "."
+        next()
+        dot_found = 1
+    end if
+    
     while 1 do
         sequence token = current()
         sequence t_name = token[_name]
-        sequence next_token = new_empty_envelope()
+        sequence next_token = new_empty_ast_token()
         sequence t_next
         if (has_more()) then
             next_token = look_next()
@@ -122,10 +123,11 @@ function build_token_from_literal_num()
     if length(buf) then
         token_start[_name] = "__BZ__NUMBER__"
         token_start[_kind] = BZKIND_LITERAL
+        token_start[_factory_request_str] = "literal_num"
         token_start[_value] = buf
         reduced = 1
     end if
-    tokens = append(tokens, token_start)
+    tokens = ast_list_append(tokens, token_start)
     return reduced
 end function
 
@@ -139,7 +141,7 @@ function build_token_from_word()
     while 1 do
         sequence token = current()
         sequence t_name = token[_name]
-        sequence next_token = new_empty_envelope()
+        sequence next_token = new_empty_ast_token()
         sequence t_next
         if (has_more()) then
             next_token = look_next()
@@ -178,7 +180,7 @@ function build_token_from_word()
         token_start[_factory_request_str] = "" -- NOT YET.  We still need one more pass for context.
         reduced = 1 
     end if
-    tokens = append(tokens, token_start)
+    tokens = ast_list_append(tokens, token_start)
     return reduced
 end function
 
@@ -200,10 +202,10 @@ function build_token_from_literal_str()
     
     -- main loop.  We're looking for double backticks and a closing
     -- backtick.
-    while 1 do -- this looks like an off by one err.  TODO: This should be while 1 do
+    while 1 do 
         sequence token = current()
         sequence t_name = sprintf("%s",token[_name])
-        sequence next_token = new_empty_envelope()
+        sequence next_token = new_empty_ast_token()
         sequence t_next 
         if has_more() then
             next_token = look_next()
@@ -233,11 +235,12 @@ function build_token_from_literal_str()
     if length(buf) then
         t_start[_name] = "__BZ__STRING__"
         t_start[_kind] = BZKIND_LITERAL
+        t_start[_factory_request_str] = "literal_str"
         t_start[_value] = buf
         reduced = 1
     end if
     
-    tokens = append(tokens, t_start)
+    tokens = ast_list_append(tokens, t_start)
     return reduced
 end function
 
@@ -338,7 +341,7 @@ function token_first_pass()
     integer made_reduction = 0
     while 1 do
         sequence token = current()
-        sequence next_token = new_empty_envelope()
+        sequence next_token = new_empty_ast_token()
         if has_more() then
             next_token = look_next()
         end if
@@ -348,7 +351,7 @@ function token_first_pass()
         if is_whitespace(t_name) then
             -- we'll clean out the spaces in a final pass later.
             -- leave them in for readability for now.
-            tokens = append(tokens, token) 
+            tokens = ast_list_append(tokens, token) 
         
         elsif equal("`", t_name) then
             made_reduction = build_token_from_literal_str()
@@ -381,7 +384,7 @@ function strip_spaces_from_stream()
         sequence token = current()
         object value = token[_value]
         if equal(value, "__DELETE_ME__") = 0 then
-            tokens = append(tokens, token)
+            tokens = ast_list_append(tokens, token)
         end if
         if (has_more()) then 
             next()
@@ -391,54 +394,6 @@ function strip_spaces_from_stream()
     end while
     
     return 0
-end function
-
-
--- In this pass we're going to evalate context.  For example a symbol
--- before a word is means that the word is either a function or a variable
--- figure out which.  A negative symbol before a variable or a number could mean
--- minus.. but it could also be a sign. Like  -5  or -#x.  Finnaly we
--- can eliminate spaces.  
---
--- Let's consider a third pass.. Maybe?  to do grammer and syntax checking.
--- there is a bunch of stuff that can be caught now before categorization.  
--- For example unclosed if blocks or $x--.  Danger here is that, if the 
--- tokenizer is too smart, it eliminates possibilities.  for example, 
--- $x-- could literaly mean pop the last char off of a string. But, 
--- I didn't think of that until I was writing this comment. Things 
--- to think about.  
---
--- I'll probably do a third pass anyway.  If for no other reason but
--- to look for stray tokens.  Ones with no _kind or factory_request_str.
-function token_second_pass()
-    -- TODO I'm not going to finish this function in this file
-    -- moving to a lang specific file... 
-    while 1 do
-        sequence token = current()
-        sequence last_token = new_empty_envelope()
-        sequence next_token = new_empty_envelope()
-        
-        if (has_less()) then
-            last_token = recall()
-        end if 
-        
-        if (has_more()) then
-            next_token = look_next()
-        end if
-               
-        if (has_more()) then
-            next()
-        else
-            exit
-        end if
-    end while
-    return 0
-end function
-
--- TODO:: looking for tokens that are stray
--- looking for unmached block statement
-function token_last_pass()
-return 0
 end function
 
 function raw_to_token()
@@ -454,13 +409,13 @@ function raw_to_token()
         integer error = 0
         -- 1 skip some whitespace
         if  is_whitespace(c) then
-                sequence token = new_empty_envelope()
+                sequence token = new_empty_ast_token()
                 token[_name] = " "
                 token[_line_num] = line_num
                 token[_value] = "__DELETE_ME__"
                 -- not really needed for the machine... but for the
                 -- man, this makes things a little easier to read.
-                tokens = append(tokens, token) 
+                tokens = ast_list_append(tokens, token) 
             col_num += 1
         -- 2 new lines
         elsif find(c,{"\n", "\r"}) then
@@ -473,20 +428,20 @@ function raw_to_token()
         else
             sequence lastc = sprintf("%s",{recall()})
             if is_whitespace(lastc) or col_num = 1 then
-                sequence token = new_empty_envelope()
+                sequence token = new_empty_ast_token()
                 token[_name] = " "
                 token[_line_num] = line_num
                 token[_value] = "__DELETE_ME__"
                 -- not really needed for the machine... but for the
                 -- man, this makes things a little easier to read.
-                tokens = append(tokens, token) 
+                tokens = ast_list_append(tokens, token) 
             end if
 
-            sequence token = new_empty_envelope()
+            sequence token = new_empty_ast_token()
             token[_name] = c
             token[_line_num] = line_num
             token[_col_num] = col_num
-            tokens = append(tokens, token)
+            tokens = ast_list_append(tokens, token)
             col_num += 1
         end if
         if (has_more()) then
@@ -510,6 +465,7 @@ public function make_tokens(sequence raw, sequence symbols, sequence keywords, s
     _symbols = symbols
     _keywords = keywords
     _paired = paired
+    tokens = {}
 
     ezbzll1:init(raw)
     if has_more() = 0 then
@@ -541,11 +497,5 @@ public function make_tokens(sequence raw, sequence symbols, sequence keywords, s
     print_token_stream()
     
     return tokens
-end function
-
-public function new_empty_envelope()
-    -- NOTE TO SELF: changes here might mean there were changes to the enum CHECK TO OF CODE
-    -- enum _kind, _name, _line_num, _col_num, _value, _factory_request_str
-    return {0, "", 0, 0, 0, ""}
 end function
 

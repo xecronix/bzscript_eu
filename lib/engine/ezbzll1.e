@@ -50,6 +50,10 @@ public function stream_pos()
     return _stream_idx
 end function
 
+public function get_copy_of_stream()
+    return _stream
+end function
+
 public function has_less()
     return _stream_idx > 1
 end function
