@@ -1,5 +1,4 @@
 -- tokenizer.e
-include bztoken.e
 include std/sequence.e
 include ezbzll1.e
 include ast_token.e
@@ -14,10 +13,10 @@ sequence _symbols = {}
 sequence _keywords = {}
 sequence _paired = {}
 
--- this function calls the is_symbol function.
--- is symbol looks up _symbols in a map and if it's
+-- This function calls the is_symbol function.
+-- Is symbol looks up _symbols in a map and if it's
 -- found returns the index to the symbol in the map.
--- using the maps we need to build a token 
+-- Using the maps we need to build a token 
 -- and add it to tokens.  Then, we need to move stream
 -- index by lenght of the symbol str - 1.  So, a 1 char
 -- symbol move the index by 1-1=0.  A two char symbox 2-1=1.
@@ -29,7 +28,7 @@ function build_token_from_symbol()
     sequence buf = ""
     sequence token_start = current()
     sequence t_name = token_start[_name]
-    sequence next_token = new_empty_ast_token()
+    sequence next_token = new_empty_ast_token() -- default token
     sequence t_next
     integer reduced = 0
     
@@ -53,8 +52,8 @@ function build_token_from_symbol()
         token_start[_name] = buf
         token_start[_kind] = BZKIND_ACTION
         token_start[_factory_request_str] = sym_fac_str
-        -- well reduced will always be true now.  I abused the buf earlier.
-        -- hmm... If I need this to have meaning i'd better fix it. 
+        -- Reduced will always be true now.  I abused the buf earlier.
+        -- hmm... If I need this to have meaning I'd better fix it. 
         -- Or, if I don't, ditch it.
         reduced = 1 
     end if
@@ -306,23 +305,6 @@ function skip_comments()
     return 0 -- no comments skipped.    
 end function
 
-function print_token_stream()
-    integer i = 1
-    puts(1,"Dumping Token Stream to STDOUT:\n")
-    while i <= length(tokens) do
-        sequence token = tokens[i]
-        if token[_kind] != -1 then
-        -- enum _kind, _name, _line_num, _col_num, _value, _factory_request_str
-            printf(1, "kind: %d name: %s line: %d col: %d value: %s factory request str: %s\n",
-             {token[_kind], token[_name], token[_line_num],
-             token[_col_num], token[_value], token[_factory_request_str]})
-        end if
-        i += 1
-    end while
-    return 0
-end function
-
-
 -- In this pass were going to collapse tokens formed
 -- from individual characters into grouped word-like 
 -- tokens.  {"f","u","n"} becomes {"fun}" 
@@ -412,7 +394,7 @@ function raw_to_token()
                 sequence token = new_empty_ast_token()
                 token[_name] = " "
                 token[_line_num] = line_num
-                token[_value] = "__DELETE_ME__"
+                token[_value] = "__DELETE_ME__" --used to find deletable tokens later.
                 -- not really needed for the machine... but for the
                 -- man, this makes things a little easier to read.
                 tokens = ast_list_append(tokens, token) 
@@ -493,9 +475,6 @@ public function make_tokens(sequence raw, sequence symbols, sequence keywords, s
     ezbzll1:init(tokens)
     tokens = {}
     strip_spaces_from_stream()
-    
-    puts(1,"make_tokens: \n")
-    print_token_stream() -- TODO Delete me.
     
     return tokens
 end function

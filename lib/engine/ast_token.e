@@ -12,13 +12,17 @@ public enum
     _factory_request_str, 
     _ast_tokens,
     __MYSIZE__ -- must be last value in enum 
-
+    
+public constant
+    BZKIND_RESOLVABLE = 1024,
+    BZKIND_LITERAL    = 1025,
+    BZKIND_ACTION     = 1026
 
 -- Magic here is we can add remove "Properties" from our data struct 
 -- Without needing remember to update this. 
 public constant  
     SIZEOF_AST_TOKEN = __MYSIZE__  
- 
+
 -- 
 -- ID pattern is SOME_NAME_THAT_MAKES_SENSE DOLLAR_SYMBOL SOME_RANDOM_CHARS 
 --     
@@ -38,8 +42,9 @@ public type TAstToken (sequence s)
 end type 
 
 public function new_empty_ast_token()
-    -- NOTE TO SELF: changes here might mean there were changes to the enum CHECK TOP OF CODE
-    -- enum _kind, _name, _line_num, _col_num, _value, _factory_request_str
+    -- NOTE TO SELF: changes here might mean there were 
+    -- changes to the enum CHECK TOP OF CODE
+    
     sequence token = repeat(0, SIZEOF_AST_TOKEN)
     token[__TYPE__] = AST_TOKEN_ID
     token[_name] = ""

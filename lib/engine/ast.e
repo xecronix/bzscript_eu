@@ -22,9 +22,7 @@ enum _group, _language, _function, _sign,
 sequence _openers = {"group_open", "sequence_open"}
 sequence _closers = {"group_close", "sequence_close"}
     
-    
 function pop_stack()
-
     sequence ast = _fun_stack[length(_fun_stack)]
     _fun_stack = remove(_fun_stack, length(_fun_stack))
     return ast
@@ -35,6 +33,9 @@ function push_stack(TAstToken ast)
     return length(_fun_stack)
 end function
 
+-- This prints the name field of each TAstToken
+-- in a given sequence.  Not exactly what the source
+-- code looked like but close enough for debugging.
 function print_expression(sequence expression)
     sequence names = {}
     integer i = 0 
@@ -42,9 +43,9 @@ function print_expression(sequence expression)
         i += 1
         object t = expression[i]
         if sequence(t) and length(t) >= _name then
-            names = ast_list_append(names, t[_name])
+            names = append(names, t[_name])
         else
-            names = ast_list_append(names, "<invalid>")
+            names = append(names, "<invalid>")
         end if
     end while
 
@@ -56,6 +57,15 @@ function print_expression(sequence expression)
     return 0
 end function
 
+-- To best explian what this function does lets consider these 2 tokens 
+-- #x ++ .  The token on the left should be a child to the one on the 
+-- right.  So the AST tree we we want is something like
+-- ++
+-- -- #x
+-- meaning the token on the left becomes a child token to the one on the 
+-- right.  All of the op_* functions have the logic to determine where 
+-- where the childern are in relation to the parent.  This just
+-- orders things accordingly. 
 function child_on_left()
     TAstToken parent = current()
     -- if (has_less()) then
@@ -64,6 +74,11 @@ function child_on_left()
     return parent
 end function 
 
+-- See comment for child_on_left().  This does the opposite.  
+-- There is a stream manager in place.  It's called ezbzll1.e 
+-- The tokens it's using for stacking are found there.  
+-- See op_addsub for how that's done.  Or, most of the 
+-- op_* functions for that matter.
 function child_on_right()
     TAstToken parent = current()
     --if (has_more()) then
@@ -72,6 +87,16 @@ function child_on_right()
     return parent
 end function 
 
+-- To best explian what this function does lets consider these 3 tokens 
+-- #x = 5 .  The token on the left and right of the = should be children. 
+-- The children's order aka child 1 or child 2 is the order they appear
+-- left to right in the source code.
+-- =
+-- -- #x
+-- -- 5
+-- All of the op_* functions have the logic to determine where 
+-- where the childern are in relation to the parent.  This just
+-- orders things accordingly.
 function child_on_both_sides()
     TAstToken parent = current()
     -- if (has_less() and has_more()) then
@@ -108,11 +133,9 @@ end function
 
 function op_logic(sequence expression)
     init(expression)
-    integer len = length(expression)
     sequence new_expression = {}
-    integer loop_count = 0
+
     while 1 do
-        loop_count += 1
         TAstToken ast_token = current()
         if find(ast_token[_factory_request_str], {"logic_and", "logic_or"}) then
             new_expression = remove(new_expression, length(new_expression))
@@ -132,11 +155,8 @@ end function
 
 function op_bool(sequence expression)
     init(expression)
-    integer len = length(expression)
     sequence new_expression = {}
-    integer loop_count = 0
     while 1 do
-        loop_count += 1
         sequence ast_token = current()
         if find(ast_token[_factory_request_str], {"num_compare_eq", "num_compare_not_eq",
             "num_compare_great", "num_compare_less",
@@ -155,30 +175,6 @@ function op_bool(sequence expression)
     end while
     return new_expression
 end function    
-
-function op_delimiter(sequence expression)
-    init(expression)
-    integer len = length(expression)
-    sequence new_expression = {}
-    integer loop_count = 0
-    while 1 do
-        loop_count += 1
-        TAstToken ast_token = current()
-        if find(ast_token[_factory_request_str], {"delimiter"}) then
-            --drop it on the floor we dont need it anymore.
-        else
-            new_expression = ast_list_append(new_expression,ast_token)
-            -- hopefully we'll never be here either.
-        end if
-
-        if (has_more()) then
-            next()
-        else
-            exit
-        end if
-    end while
-    return new_expression
-end function 
 
 function op_addsub(sequence expression)
     init(expression)
@@ -204,7 +200,6 @@ end function
 
 function op_multdiv(sequence expression)
     init(expression)
-    integer len = length(expression)
     sequence new_expression = {}
     while 1 do
         TAstToken ast_token = current()
@@ -226,7 +221,6 @@ end function
 
 function op_exponent(sequence expression)
     init(expression)
-    integer len = length(expression)
     sequence new_expression = {}
     while 1 do
         TAstToken ast_token = current()
@@ -276,44 +270,68 @@ function op_language(sequence expression)
     return expression
 end function    
 
+-- MUST return a single TAstToken.  Don't send an 
+-- empty expression.  Bad things will happen. And it's too late
+-- to do anything about it now.
 function op_math(TAstToken parent, sequence expression)
     parent = add_child(parent, parse_expression(expression))
     return parent
 end function
 
---TODO Important :This needs to reduce to a single node.
-function op_sequence(TAstToken parent, sequence ast_tokens)
-    sequence expression = {}
-    -- the parent token for this node is the first token in the sequence
+-- Important: This reduces multiple expressions to a single parent 
+-- sequence node. MUST return a single TAstToken.  Don't send an 
+-- empty expression.  Bad things will happen. And it's too late
+-- to do anything about it now.
+function op_sequence(TAstToken parent, sequence expression)
+    sequence new_expression = {}
     integer i = 0
 
-    while i < length(ast_tokens) do
+    while i < length(expression) do
         i += 1
-        TAstToken ast_token = ast_tokens[i]
-        if equal(ast_token[_factory_request_str], "group_open") then
-            -- slurp up all the tokens until the closing token
-            -- then call op_sequence again
-            -- dont forget to bookend the sequence with matching pairs
-            -- it's going to return an TAstToken.  Add it to parent.
+        TAstToken ast_token = expression[i]
         
-        elsif equal(ast_token[_factory_request_str], "group_close") then
-            -- if we have an expression to parse go ahead and do that.
-            -- add the parse result to the parent
-            -- the return the parent
-                
+        if find(ast_token[_factory_request_str], _openers) then
+            integer pos = locate_closer(expression, i)
+            new_expression = ast_list_append(new_expression, ast_token) -- add the parent
+            
+            -- Slurp all tokens until we get to the matching opener.  We
+            -- don't care what they are.  We don't want to deal with them.
+            -- We just need them in the new_expression for parsing later.
+            while i < pos do
+                i+=1
+                new_expression = ast_list_append(new_expression, expression[i])
+            end while
+        
+        -- We have a little mini group in the group.  Parse it and add
+        -- to the parent.
+        elsif find(ast_token[_factory_request_str], _closers) then
+            parent = add_child(parent, parse_expression(new_expression))
+        
+        -- Here we found the comma.  Send the expression to the parser
+        -- and and it to the parent.  But don't return yet. There might
+        -- be more commas to find and expressions to parse.        
         elsif equal(ast_token[_factory_request_str], "delimiter") then
-            -- parse the expression we've been gathering up
-            -- add the parse result to the parent
-            -- set expression to {} there might be more tokens to gather up
-
+            parent = add_child(parent, parse_expression(new_expression))
+            new_expression = {}
+        
+        -- We'll this is just a token to gather up and parse later.
         else
-            expression = ast_list_append(expression, ast_token)
+            new_expression = ast_list_append(new_expression, ast_token)
         end if
     end while
-    return 0
+
+    -- op_group trimmed the closing ) from the expression before it
+    -- got here. so... we're definately going to reach this point.
+    if length(new_expression) then
+        parent = add_child(parent, parse_expression(new_expression))
+    end if
+
+    return parent
 end function
 
--- This reduces groups out of an expression.
+-- This reduces groups out of an expression.  Lot's of 
+-- comments inline.  Very much worth the read.  This
+-- must return an expression of 1 or more TAstTokens.  
 function op_group(sequence expression)
     sequence new_expression = {} -- the reduced expression: the whole point if this function
     integer restart_reduction = 0
@@ -343,13 +361,22 @@ function op_group(sequence expression)
             
             -- Let's find out how to route this 
             -- token is "math" or "not math" aka -> sequence
+            -- handle empty groups here.
             TAstToken group
-            if equal(parent[_value], token_hint(_math)) then
-                group = op_math(parent, exp_frag)
+            if length(exp_frag) then
+                if equal(parent[_value], token_hint(_math)) then
+                    group = op_math(parent, exp_frag)
+                else
+                    group = op_sequence(parent, exp_frag)
+                end if
             else
-                group = op_sequence(parent, exp_frag)
+                -- the exp_frag was empty. But were here. We'll create
+                -- an empty node.  It might be and probably will be 
+                -- needed for other reductions, not related to grouping.
+                -- for example #x = random() * 4 
+                group = parent
             end if
-          
+                          
             new_expression = ast_list_append(new_expression, group)
             --slurp up the rest of the expression
             -- i is setting on the closing ) of the expression we sent to the op
@@ -359,8 +386,8 @@ function op_group(sequence expression)
                 new_expression = ast_list_append(new_expression, expression[i])
             end while
             
-            -- and finally... the little dance 
-            -- we did some reductions, we need to start all over until
+            -- And finally... the little dance 
+            -- We did some reductions, we need to start all over until
             -- there are no more reductions.
             expression = new_expression
             new_expression = {}
@@ -372,6 +399,19 @@ function op_group(sequence expression)
     return new_expression
 end function
 
+-- This is how order of operations are mananged.  The 
+-- while loop is visually deceiving.  The order of the
+-- if/elsif/else isn't controlling the Order of Operations.
+-- This controlled by an enum.  The order of the enum
+-- is what's actually controlling the order.  See top
+-- of file for enum.  A "copy" represented as a comment
+-- is included in the function.  CAREFUL...Like all
+-- documentation, the enum comment copy started to 
+-- rot the. moment I wrote it.  Check the top of the file 
+-- for TRUTH.
+--
+-- Also, This method must return a single TAstToken.
+-- Definately bad things will happen if it can't
 function parse_expression(sequence expression)
 --enum  _group,      _language,   _function, _sign, 
      -- _exponent,   _multdiv,    _addsub, 
@@ -405,12 +445,13 @@ function parse_expression(sequence expression)
        
     end while
     
-    puts(1,"parse_expression: we're leaving parse_expression.  \n")
-    print_ast_token(expression[1])
-    
     return expression[1]
 end function
 
+-- This function must return a single TAstToken Anything else
+-- will cause crashes later.  Don't call this function with 
+-- any empty ast_tokens sequence. Bad things will happen and 
+-- there is nothing that can be done about now.
 function make_ast_loop(TAstToken parent, sequence ast_tokens)
     integer i = 0
     sequence expression = {}
@@ -437,6 +478,9 @@ function make_ast_loop(TAstToken parent, sequence ast_tokens)
     return 0
 end function
 
+-- If the symbol called open_symbol is a matched
+-- pair, it will return the closing symbol.  For
+-- example given ( the return value will be )
 function find_closing_symbol(sequence open_symbol)
     sequence closing_sym = ""
     for i = 1 to length(language:paired) do
@@ -449,6 +493,14 @@ function find_closing_symbol(sequence open_symbol)
     return closing_sym
 end function
 
+-- The expression isn't assumed to be a fragment.  It might
+-- be a very long expression that as a dev you might be part
+-- way into parsing.  With that in mind start is the starting
+-- TAstToken postion in an expression to start looking for 
+-- a matched pair.  The return value is the position
+-- in the expression of the matched pair.  My original purpose
+-- for this function was to find a the location or a matched pair
+-- and uncondtionally slurp up tokens until that point.  
 function locate_closer(sequence expression, integer start)
     integer pos = start
     TAstToken match_this_token = expression[pos]
@@ -478,7 +530,7 @@ function locate_closer(sequence expression, integer start)
         end if
         pos += 1
     end while
-    printf(1, "locate_closer: Could not find symbol. Looked for closing symbol for token:[%s] on line:[%d], col:[%d]", {open_sym,
+    printf(1, "locate_closer: Could not find symbol. Looked for closing symbol for token:[%s] on line:[%d], col:[%d]\n", {open_sym,
         match_this_token[_line_num],
         match_this_token[_col_num]})
     abort(1)
@@ -516,7 +568,12 @@ function test_ast_e()
     --input = "{(5+(3+7));}"
     --input = "{((5+(3+7)));}"
     --input ="{((((#x+1)*2)));"
-    input ="{#n=((((#x+1)*2)-((3/(#y+4))+5)));}"
+    --input ="{#n=((((#x+1)*2)-((3/(#y+4))+5)));}"
+    --input ="{@a=[1,2,3,`and a string :)`];}"
+    --input ="{@a=[1,[2,3],`Eagle's Nest :)`];}"
+    --input ="{[1,2*3, 4];}"
+    input ="{@z=[1, [2+3], [4, [5]]];}"
+    input ="{@z=[1, (5+2)+(9*0), [4, [`Level up + Power up = WAY UP`]]];}"
     tokens = make_tokens(input, symbols, keywords, paired)
     tokens = group_tokens(input, tokens, symbols, keywords, paired)
     puts(1, "Bulding AST...\n")

@@ -17,7 +17,7 @@ public sequence value_hints = {
     
 public sequence symbols = {
     {";", "expression_end"},
-    {"@","var_array"}, {"$","var_string"},{"#","var_number"},
+    {"@","var_sequence"}, {"$","var_string"},{"#","var_number"},
     {"(", "group_open"}, {")", "group_close"},
     {"{", "block_open"}, {"}", "block_close"},
     {"[", "sequence_open"}, {"]", "sequence_close"},

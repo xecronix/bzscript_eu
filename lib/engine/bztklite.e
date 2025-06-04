@@ -3,7 +3,6 @@
 
 with trace
 include tokenizer.e
-include bztoken.e
 include ezbzll1.e
 include std/io.e
 include std/sequence.e
@@ -29,15 +28,6 @@ public function token_hint(integer hint_idx)
 end function
 
 -- TODO I'm going to want this for matching pairs
-function push(sequence word)
-return 1
-end function 
-
--- TODO I'm going to want this for matching pairs
-function pop()
-return 1
-end function
-
 -- I'm going to want this for matching pairs
 public function is_open_pair(sequence str)
     integer found = 0
@@ -64,33 +54,12 @@ public function is_closing_pair(sequence str)
     return found
 end function 
 
--- TODO I'm going to want this for matching pairs
-function is_valid_closing_pair(sequence str)
-return 1
-end function
-
 function is_keyword(sequence char)
     integer i = 1
     while i <= length(_keywords) do
         sequence k = _keywords[i][_keyword_name]
         if equal(char, k) then
             return i
-        end if
-        i += 1
-    end while
-    return 0
-end function
-
-function print_token_stream()
-    integer i = 1
-    puts(1,"...Dumping Token Stream to STDOUT:\n")
-    while i <= length(_tokens) do
-        sequence token = _tokens[i]
-        if token[_kind] != -1 then
-        -- enum _kind, _name, _line_num, _col_num, _value, _factory_request_str
-            printf(1, "kind: %d name: %s line: %d col: %d value: %s factory request str: %s\n",
-             {token[_kind], token[_name], token[_line_num],
-             token[_col_num], token[_value], token[_factory_request_str]})
         end if
         i += 1
     end while
