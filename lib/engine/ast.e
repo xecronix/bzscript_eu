@@ -11,8 +11,7 @@ include std/pretty.e
 include language.e
 
 sequence _tokens = {}
-sequence _stack = {} 
-sequence _grp_stack = {}
+sequence _fun_stack = {} 
 sequence _xml = {}
 
 enum _group, _language, _function, _sign, 
@@ -20,31 +19,20 @@ enum _group, _language, _function, _sign,
     _bool, _logic, _assign, _leaf, _delimiter,
     _terminator, _ptypes
     
-sequence _openers = {"group_open", "array_open"}
-sequence _closers = {"group_close", "array_close"}
+sequence _openers = {"group_open", "sequence_open"}
+sequence _closers = {"group_close", "sequence_close"}
     
     
 function pop_stack()
 
-    sequence ast = _stack[length(_stack)]
-    _stack = remove(_stack, length(_stack))
+    sequence ast = _fun_stack[length(_fun_stack)]
+    _fun_stack = remove(_fun_stack, length(_fun_stack))
     return ast
 end function     
 
 function push_stack(TAstToken ast)
-    _stack = ast_list_append(_stack,ast)
-    return length(_stack)
-end function
-
-function pop_grp_stack()
-    sequence ast = _grp_stack[length(_grp_stack)]
-    _grp_stack = remove(_grp_stack, length(_grp_stack))
-    return ast
-end function     
-
-function push_grp_stack(TAstToken ast)
-    _grp_stack = ast_list_append(_grp_stack,ast)
-    return 0
+    _fun_stack = ast_list_append(_fun_stack,ast)
+    return length(_fun_stack)
 end function
 
 function print_expression(sequence expression)
@@ -67,7 +55,6 @@ function print_expression(sequence expression)
     printf(1, "Expression:\n%s\n", {line})
     return 0
 end function
-
 
 function child_on_left()
     TAstToken parent = current()
@@ -193,42 +180,10 @@ function op_delimiter(sequence expression)
     return new_expression
 end function 
 
-
--- TODO... this is dead code.. it should be removed.
-function op_leaf(sequence expression)
-    
-    if (length(expression) = 0) then
-        return expression
-    end if
-    
-    init(expression)
-    integer len = length(expression)
-    sequence new_expression = {}
-    
-    while 1 do
-        TAstToken ast_token = current()
-        if find(ast_token[_factory_request_str], {"var_number", "var_string",
-            "literal_num", "literal_str"}) then
-            
-            ---what... do nothing... why
-        end if
-        new_expression = ast_list_append(new_expression,ast_token)
-        if (has_more()) then
-            next()
-        else
-            exit
-        end if
-    end while
-    puts(1, "op_leaf: new_expression\n")
-    print_expression(new_expression)
-    return new_expression
-end function    
-
 function op_addsub(sequence expression)
     init(expression)
     sequence new_expression = {}
-    puts(1, "op_addsub:  let's see what the expression is before the crash????\n")
-    print_ast_token_list(expression)
+
     while 1 do
         TAstToken ast_token = current()
         if find(ast_token[_factory_request_str], {"add", "subtract"}) then
@@ -321,127 +276,107 @@ function op_language(sequence expression)
     return expression
 end function    
 
-function block_open(TAstToken ast_token)
-    integer len_of_stack  = push_stack(ast_token)  
-    return len_of_stack
+function op_math(TAstToken parent, sequence expression)
+    parent = add_child(parent, parse_expression(expression))
+    return parent
 end function
 
-function block_close(TAstToken ast_token)
-    TAstToken child = pop_stack()
-    TAstToken parent = pop_stack()
-    parent = add_child(parent, child)
-    push_stack(parent)    
+--TODO Important :This needs to reduce to a single node.
+function op_sequence(TAstToken parent, sequence ast_tokens)
+    sequence expression = {}
+    -- the parent token for this node is the first token in the sequence
+    integer i = 0
+
+    while i < length(ast_tokens) do
+        i += 1
+        TAstToken ast_token = ast_tokens[i]
+        if equal(ast_token[_factory_request_str], "group_open") then
+            -- slurp up all the tokens until the closing token
+            -- then call op_sequence again
+            -- dont forget to bookend the sequence with matching pairs
+            -- it's going to return an TAstToken.  Add it to parent.
+        
+        elsif equal(ast_token[_factory_request_str], "group_close") then
+            -- if we have an expression to parse go ahead and do that.
+            -- add the parse result to the parent
+            -- the return the parent
+                
+        elsif equal(ast_token[_factory_request_str], "delimiter") then
+            -- parse the expression we've been gathering up
+            -- add the parse result to the parent
+            -- set expression to {} there might be more tokens to gather up
+
+        else
+            expression = ast_list_append(expression, ast_token)
+        end if
+    end while
     return 0
 end function
 
--- OK... so I don't know how to do this using a stack... but I can 
--- derive a way to do this without one.  Instead of looking for opening groups... 
--- iterate over the list looking for closing groups.
-
--- start loop
--- start stitching together a reduced stream
--- find closing )
--- backup up and capture stream fragment to opening (
--- send stream fragment to parse
--- add parse results to reduced stream.
--- drop the closing )
--- append the rest of the original stream after ) to reduced stream
--- original stream = reduced stream
--- reduced stream = ""
--- restart process until no more reductions are made.
-
--- Reviewed and cleaned-up version of op_group with comments and corrections
+-- This reduces groups out of an expression.
 function op_group(sequence expression)
-    init(expression)
-    sequence new_expression = {}
+    sequence new_expression = {} -- the reduced expression: the whole point if this function
     integer restart_reduction = 0
-    while  1 do
-        TAstToken ast_token = current()
-        restart_reduction = 0
-    
-        if equal(ast_token[_factory_request_str], "group_close") then
-            integer close_pos = stream_pos()
-
-            -- Rewind to the matching group_open
-            integer stop = 0
-            while stop = 0 do
-                TAstToken t = back()
-                if equal(t[_factory_request_str], "group_open") then
-                    stop = 1
-                    t[_factory_request_str] = "node_open"
-                    new_expression[length(new_expression)] = t                    
-                else
-                    new_expression = remove(new_expression, length(new_expression))
-                end if
-            end while
-            -- Capture the sub-expression between ( and )
+    integer i = 0
+    while  i < length(expression) do
+        i += 1
+        TAstToken t = expression[i]
+        if find(t[_factory_request_str], _openers) then
+            -- at this point we know t isn't some random token
+            -- it's a node opening token.  I'm tempted to rename it
+            -- now.  I guess I'm overwhelmed with temptation.
+            TAstToken parent = t
+            parent[_factory_request_str] = "node_open"
+            integer end_pos = locate_closer(expression, i)
             sequence exp_frag = {}
-            integer has_delimiter = 0
-            while stream_pos() < close_pos - 1 do
-                exp_frag = ast_list_append(exp_frag, next())
-                TAstToken frag_t = current()
-                if equal(frag_t[_factory_request_str], "delimiter") then
-                  has_delimiter = 1
-                end if
+            
+            i += 1 -- skip the opener aka parent.
+            while i < end_pos do
+                exp_frag = ast_list_append(exp_frag, expression[i])
+                i+=1
             end while
             
+            -- exp_frag should be the expression except the opening and closing
+            -- token. we're not putting the open tag in there becuase we mutated
+            -- it and gave it "node_open". The mutation was needed so we don't
+            -- end up in an endless loop. 
             
-            -- TODO: deal with commas in the stream. already detected
-            -- via has_delimiter flag.
-            
-            _grp_stack = {}
-            parse_expression(exp_frag, 1) -- mutates the LL1 stream
-            init(expression, close_pos)   -- move to the ')'
-            
-            TAstToken reduced_token = pop_grp_stack()
-
-            TAstToken parent = new_expression[length(new_expression)]
-            parent = add_child(parent, reduced_token)
-            new_expression[length(new_expression)] = parent
-
-            -- Append remainder of the stream
-            while has_more() do
-                new_expression = ast_list_append(new_expression, next())
+            -- Let's find out how to route this 
+            -- token is "math" or "not math" aka -> sequence
+            TAstToken group
+            if equal(parent[_value], token_hint(_math)) then
+                group = op_math(parent, exp_frag)
+            else
+                group = op_sequence(parent, exp_frag)
+            end if
+          
+            new_expression = ast_list_append(new_expression, group)
+            --slurp up the rest of the expression
+            -- i is setting on the closing ) of the expression we sent to the op
+            -- we don't want it.
+            while i < length(expression) do
+                i+=1 -- on the first loop we smite the close )
+                new_expression = ast_list_append(new_expression, expression[i])
             end while
             
-            restart_reduction = 1
+            -- and finally... the little dance 
+            -- we did some reductions, we need to start all over until
+            -- there are no more reductions.
             expression = new_expression
             new_expression = {}
-            init(expression)
-
+            i = 0            
         else
-            new_expression = ast_list_append(new_expression, ast_token)
-        end if
-
-        if has_more() then
-            -- in the above loop we set continue_reduction to 1
-            -- and reset the ezbzll1 stream.  the stream is already
-            -- primed and ready.  don't move it.
-            if restart_reduction = 0 then
-                next()
-            end if
-        else
-            exit
+            new_expression = ast_list_append(new_expression, t)
         end if
     end while
-
     return new_expression
 end function
 
-function parse_expression(sequence expression, integer is_group = 0)
+function parse_expression(sequence expression)
 --enum  _group,      _language,   _function, _sign, 
      -- _exponent,   _multdiv,    _addsub, 
      -- _bool,       _logic,      _assign,  _leaf ,
      -- _delimiter,  _terminator, _ptypes
-     
-     -- by the time _terminator is hit the expression should
-     -- already be reduced.  This is really just a way
-     -- that could be used to not fail.  We'll see if
-     -- I actaully do that. I'd almost rather the failure
-     -- than to keep going on in a bad or unknown state.
-     -- I think I need another one of these for arrays vars.
-     -- those seem like an implicite group. We'll see when
-     -- I get there.
 
     integer prec = 1
     while prec < _ptypes do
@@ -470,31 +405,30 @@ function parse_expression(sequence expression, integer is_group = 0)
        
     end while
     
-    if is_group then
-        printf(1, "stack len = %d\n", {length(_stack)})
-        push_grp_stack(expression[1])
-    else
-        
-        sequence ast = pop_stack()
-        ast = add_child(ast, expression[1])
-        printf(1, "stack len = %d\n", {push_stack(ast)})
-    end if
-
-    return 0
+    puts(1,"parse_expression: we're leaving parse_expression.  \n")
+    print_ast_token(expression[1])
+    
+    return expression[1]
 end function
 
-function make_ast_loop(sequence ast_tokens)
+function make_ast_loop(TAstToken parent, sequence ast_tokens)
     integer i = 0
     sequence expression = {}
+    
+    --TODO:: I'm cheating here.  I know the input
+    -- will start and end with {} for now
+    -- but, it wont be that way for much longer.
+   
     while i < length(ast_tokens) do
         i += 1
         TAstToken ast_token = ast_tokens[i]
         if equal(ast_token[_factory_request_str], "block_open") then
-            block_open(ast_token)
+            make_ast_loop(ast_token, slice(ast_tokens, 2)) -- TODO:: this needs to be smarter.  get the code between matching {}
         elsif equal(ast_token[_factory_request_str], "block_close") then
-            block_close(ast_token)
+            return parent
         elsif equal(ast_token[_factory_request_str], "expression_end") then
-            parse_expression(expression)
+            TAstToken reduced_t = parse_expression(expression)                                         
+            parent = add_child(parent, reduced_t)
             expression = {}
         else
             expression = ast_list_append(expression, ast_token)
@@ -502,15 +436,60 @@ function make_ast_loop(sequence ast_tokens)
     end while
     return 0
 end function
+
+function find_closing_symbol(sequence open_symbol)
+    sequence closing_sym = ""
+    for i = 1 to length(language:paired) do
+        sequence p = language:paired[i]
+        if equal(p[1], open_symbol) then
+            closing_sym = p[2]
+            exit
+        end if
+    end for
+    return closing_sym
+end function
+
+function locate_closer(sequence expression, integer start)
+    integer pos = start
+    TAstToken match_this_token = expression[pos]
+    sequence open_sym = match_this_token[_name]
+    sequence close_sym = find_closing_symbol(open_sym)
+    
+    if length(close_sym) = 0 then
+        printf(1, "locate_closer: Could not find closing symbol for token:[%s] on line:[%d], col:[%d]", {open_sym,
+            match_this_token[_line_num],
+            match_this_token[_col_num]})
+        abort(1)
+    end if
+
+    integer nest_level = 0
+    integer stop = length(expression) + 1
+    while pos < stop do
+        TAstToken t = expression[pos] 
+        sequence current_sym = t[_name]
+        if equal(current_sym, open_sym) then
+            nest_level+=1
+        elsif equal(current_sym, close_sym) then
+            nest_level-=1
+        end if
+
+        if nest_level = 0 then
+            return pos
+        end if
+        pos += 1
+    end while
+    printf(1, "locate_closer: Could not find symbol. Looked for closing symbol for token:[%s] on line:[%d], col:[%d]", {open_sym,
+        match_this_token[_line_num],
+        match_this_token[_col_num]})
+    abort(1)
+    
+end function
     
 public function make_ast(sequence ast_tokens)
     TAstToken root = new_empty_ast_token()
     root[_name] = "__ast_token_root__"
-    push_stack(root)
-    
-    make_ast_loop(ast_tokens)
-    
-    return pop_stack()
+    root = make_ast_loop(root, ast_tokens)
+    return root    
 end function
 
 function test_ast_e()
@@ -534,9 +513,13 @@ function test_ast_e()
     --input = "{#x= (5 +7) * (#e / 6);}"
     --input = "{#x= ((222 + #x),444,777 * #y);}"
     --input = "{#a = (1 + 2)+ (3 * (4 + #b)+ #c);}"
-    input ="{#n = ((((#x + 1) * 2) - ((3 / (#y + 4)) + 5)));}"
+    --input = "{(5+(3+7));}"
+    --input = "{((5+(3+7)));}"
+    --input ="{((((#x+1)*2)));"
+    input ="{#n=((((#x+1)*2)-((3/(#y+4))+5)));}"
     tokens = make_tokens(input, symbols, keywords, paired)
     tokens = group_tokens(input, tokens, symbols, keywords, paired)
+    puts(1, "Bulding AST...\n")
     ast = make_ast(tokens)
     --pretty_print(1, ast)
     printf(1, "input: \n\n%s\n\nOutput\n\n",{input})

@@ -8,6 +8,7 @@ include ezbzll1.e
 include std/io.e
 include std/sequence.e
 include ast_token.e
+include language.e
 
 sequence _stack    = {}
 sequence _symbols  = {}
@@ -15,22 +16,10 @@ sequence _keywords = {}
 sequence _paired   = {}
 sequence _tokens   = {}
 
--- Strongly typed hint enums
-enum _fun_call, _fun_def, _fun_call_group, _fun_def_group, _math, _bz_keyword
-enum _keyword_name, _keyword_factory_str
 
--- Decoupled map: {enum, string}
-sequence value_hints = {
-    {_fun_call,              "__FUN_CALL__"        },
-    {_fun_def,               "__FUN_DEF__"         },
-    {_fun_call_group,        "__FUN_CALL_GROUP__"  },
-    {_fun_def_group,         "__FUN_DEF_GROUP__"   },
-    {_math,                  "__MATH__"            },
-    {_bz_keyword,               "__KEYWORD__"      }
-}
 
 -- Safe hint lookup function
-function token_hint(integer hint_idx)
+public function token_hint(integer hint_idx)
     for i = 1 to length(value_hints) do
         if value_hints[i][1] = hint_idx then
             return value_hints[i][2]
@@ -49,15 +38,31 @@ function pop()
 return 1
 end function
 
--- TODO I'm going to want this for matching pairs
-function is_open_pair(sequence str)
-return 1
+-- I'm going to want this for matching pairs
+public function is_open_pair(sequence str)
+    integer found = 0
+    for i = 1 to length(language:paired) do
+        sequence p = language:paired[i]
+        if equal(p[1], str) then
+            found = 1
+            exit
+        end if
+    end for
+    return found
 end function 
 
--- TODO I'm going to want this for matching pairs
-function is_closing_pair(sequence str)
-return 1
-end function
+-- I'm going to want this for matching pairs
+public function is_closing_pair(sequence str)
+    integer found = 0
+    for i = 1 to length(language:paired) do
+        sequence p = language:paired[i]
+        if equal(p[2], str) then
+            found = 1
+            exit
+        end if
+    end for
+    return found
+end function 
 
 -- TODO I'm going to want this for matching pairs
 function is_valid_closing_pair(sequence str)
@@ -78,7 +83,7 @@ end function
 
 function print_token_stream()
     integer i = 1
-    puts(1,"Dumping Token Stream to STDOUT:\n")
+    puts(1,"...Dumping Token Stream to STDOUT:\n")
     while i <= length(_tokens) do
         sequence token = _tokens[i]
         if token[_kind] != -1 then
@@ -116,7 +121,8 @@ public function group_tokens(sequence raw_source, sequence tokens,
     _paired = paired
     _tokens = {} -- <-- not a mistake... make sure it's empty... this is what we're building.
     ezbzll1:init(tokens)
-        
+    
+            
     while 1 do
         sequence token = current()
         sequence next_token = new_empty_ast_token()
@@ -130,6 +136,7 @@ public function group_tokens(sequence raw_source, sequence tokens,
             prev_token = _tokens[length(_tokens)]
         end if
         
+        sequence token_name = token[_name] -- easy to view in debugger
         
         if equal(token[_kind], BZKIND_LITERAL) then
             -- if the token is a literal... add to _tokens
@@ -166,10 +173,6 @@ public function group_tokens(sequence raw_source, sequence tokens,
             
             _tokens = append(_tokens, token)
             
-        elsif length(token[_factory_request_str]) then
-            -- token has a factory request str add to tokens. it's a symbol.
-            _tokens = append(_tokens, token)
-            
         elsif is_keyword(token[_name]) then
             integer keyword_idx = is_keyword(token[_name])
             sequence keyword_map = _keywords[keyword_idx]
@@ -201,6 +204,16 @@ public function group_tokens(sequence raw_source, sequence tokens,
         
         
             _tokens = append(_tokens, token)  
+        
+        elsif length(token[_factory_request_str]) then
+            -- token has a factory request str add to tokens. it's a symbol.
+            -- Also, this symbol is considered recognizable soley by the
+            -- factory_request_str.  Any symbol that needs further clarity 
+            -- should be handled above this elsif.
+            --
+            -- For example - might be negative or it might be minus
+            -- ( might be for a function call or maybe math
+            _tokens = append(_tokens, token)
             
         else
             -- user function
@@ -214,7 +227,6 @@ public function group_tokens(sequence raw_source, sequence tokens,
         end if
     end while  
     
-    print_token_stream()
     return _tokens  
 end function
 
@@ -249,38 +261,7 @@ function test_bztklite_e()
 --        "    let #total = #cost + #cost * #tax;",
 --       "    print($total);",
 --      "}"}, "\n")
-    
-    sequence symbols = {
-    {";", "expression_end"},
-    {"@","var_array"}, {"$","var_string"},{"#","var_number"},
-    {"(", "group_open"}, {")", "group_close"},
-    {"{", "block_open"}, {"}", "block_close"},
-    {"[", "array_open"}, {"]", "array_close"},
-    {"+", "add"}, {"-", "subtract"}, {"*", "multiply"}, {"/", "divide"},
-    {"^", "exponent"}, {"=", "assignment"},
-    {"==", "num_compare_eq"}, {"!=", "num_compare_not_eq"},
-    {">", "num_compare_great"}, {"<", "num_compare_less"},
-    {">=", "num_compare_great_eq"}, {"<=", "num_compare_less_eq"},
-    {"+=", "increase_by"}, {"-=", "subtract_by"},
-    {"*=", "multiply_by"}, {"/=", "divide_by"},
-    {"++", "increment"}, {"--", "decrement"},
-    {",", "delimiter"},
-    {"//", "__STRIP__"},
-    {"`", "__STRIP__"}, {"``", "__STRIP__"}
-}
 
-sequence keywords = {
-    {"fun", "fun"}, {"let", "let"},
-    {"if", "if"}, {"else", "else"}, {"elseif", "elseif"},
-    {"do", "do_loop"}, {"break", "break"}, {"continue", "continue"},
-    {"return", "return"}
-}
-
-sequence paired = {
-    {"(", {")"}},
-    {"{", {"}"}},
-    {"[", {"]"}}
-}
 
     sequence tokens = make_tokens(input, symbols, keywords, paired)
     tokens = group_tokens(input, tokens, symbols, keywords, paired)

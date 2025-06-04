@@ -1,0 +1,30 @@
+input:
+
+{#n=((((#x+1)*2)-((3/(#y+4))+5)));}
+
+Output
+
+ kind: 0 name: __ast_token_root__ line: 0 col: 0 value:  factory request str:
+    kind: 1026 name: = line: 1 col: 4 value:  factory request str: assignment
+       kind: 1026 name: #n line: 1 col: 2 value:  factory request str: var_number
+       kind: 1026 name: ( line: 1 col: 5 value: __MATH__ factory request str: node_open
+          kind: 1026 name: ( line: 1 col: 6 value: __MATH__ factory request str: node_open
+             kind: 1026 name: - line: 1 col: 17 value:  factory request str: subtract
+                kind: 1026 name: ( line: 1 col: 7 value: __MATH__ factory request str: node_open
+                   kind: 1026 name: * line: 1 col: 14 value:  factory request str: multiply
+                      kind: 1026 name: ( line: 1 col: 8 value: __MATH__ factory request str: node_open
+                         kind: 1026 name: + line: 1 col: 11 value:  factory request str: add
+                            kind: 1026 name: #x line: 1 col: 9 value:  factory request str: var_number
+                            kind: 1025 name: __BZ__NUMBER__ line: 1 col: 12 value: 1 factory request str: literal_num
+                      kind: 1025 name: __BZ__NUMBER__ line: 1 col: 15 value: 2 factory request str: literal_num
+                kind: 1026 name: ( line: 1 col: 18 value: __MATH__ factory request str: node_open
+                   kind: 1026 name: + line: 1 col: 29 value:  factory request str: add
+                      kind: 1026 name: ( line: 1 col: 19 value: __MATH__ factory request str: node_open
+                         kind: 1026 name: / line: 1 col: 21 value:  factory request str: divide
+                            kind: 1025 name: __BZ__NUMBER__ line: 1 col: 20 value: 3 factory request str: literal_num
+                            kind: 1026 name: ( line: 1 col: 22 value: __MATH__ factory request str: node_open
+                               kind: 1026 name: + line: 1 col: 25 value:  factory request str: add
+                                  kind: 1026 name: #y line: 1 col: 23 value:  factory request str: var_number
+                                  kind: 1025 name: __BZ__NUMBER__ line: 1 col: 26 value: 4 factory request str: literal_num
+                      kind: 1025 name: __BZ__NUMBER__ line: 1 col: 30 value: 5 factory request str: literal_num
+Program finish Successfully.  (Or at least it didn't crash.  :) )

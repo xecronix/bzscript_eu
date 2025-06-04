@@ -493,8 +493,9 @@ public function make_tokens(sequence raw, sequence symbols, sequence keywords, s
     ezbzll1:init(tokens)
     tokens = {}
     strip_spaces_from_stream()
-
-    print_token_stream()
+    
+    puts(1,"make_tokens: \n")
+    print_token_stream() -- TODO Delete me.
     
     return tokens
 end function
